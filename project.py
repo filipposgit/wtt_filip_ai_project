@@ -7,7 +7,7 @@ from langchain.llms import OpenAI
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS
 
-os.environ["OPENAI_API_KEY"] = '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'
+os.environ["OPENAI_API_KEY"] = ''
 llm = OpenAI(temperature=0.9)
 
 loader = DirectoryLoader('C:/Users/filip.balsewicz/Desktop/my_folder')
