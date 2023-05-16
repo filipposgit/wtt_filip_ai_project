@@ -1,15 +1,18 @@
+import os
+import io
 import streamlit as st
-from langchain.chains import RetrievalQA
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.llms import OpenAI
+from streamlit_chat import message
 from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
+from langchain.chains import RetrievalQA
+from langchain.llms import OpenAI
 
-# Setting up the page
-st.set_page_config(page_title=" Document retrieval and question answering with langchain library", page_icon=":robot:")
-st.header(" Document retrieval and question answering with langchain library")
+os.environ["OPENAI_API_KEY"] = ''
 
-# Creating columns
+st.set_page_config(page_title="Document retrieval and question answering with langchain library", page_icon=":robot:")
+st.header("Document retrieval and question answering with langchain library")
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -26,50 +29,54 @@ with col2:
 with col3:
     st.image(image="chat_gpt.png", width=200)
 
-
-# Loading the llm
-def load_llm():
-    llm2 = OpenAI(temperature=0.5)
-    return llm2
+uploaded_file = st.file_uploader("Upload your file to analyze.")
 
 
-llm = load_llm()
+def generate_response(query):
+    if uploaded_file is None:
+        return "No file uploaded."
 
-# Upload file function
-uploaded_file = st.file_uploader("Upload your file to analyze. ")
+    file_stream = io.TextIOWrapper(uploaded_file, encoding='utf-8')
+    text_splitter = CharacterTextSplitter(chunk_size=1600, chunk_overlap=0)
+    texts = text_splitter.split_documents(file_stream)
 
-documents = uploaded_file.load()
+    if not texts:
+        return "No documents found."
 
-text_splitter = CharacterTextSplitter(chunk_size=1600, chunk_overlap=0)
+    embeddings = OpenAIEmbeddings()
+    db = FAISS.from_documents(texts, embeddings)
+    retriever = db.as_retriever()
 
-texts = text_splitter.split_documents(documents)
+    docs = retriever.get_relevant_documents(query)
 
-embeddings = OpenAIEmbeddings()
-
-db = FAISS.from_documents(texts, embeddings)
-
-retriever = db.as_retriever()
-
-docs = retriever.get_relevant_documents("What is the text about")
-
-qa = RetrievalQA.from_chain_type(
-    llm=OpenAI(), chain_type="stuff", retriever=retriever, return_source_documents=True)
-
-
-def question():
-    query = st.text_area("Enter your question", key='my_new_key')
-    return query
-
-
-final_question = question()
-
-
-def answer():
-    result = qa({"final_question": final_question})
+    qa = RetrievalQA.from_chain_type(llm=OpenAI(), chain_type="stuff", retriever=retriever,
+                                     return_source_documents=True)
+    result = qa({"query": query, "docs": docs})
 
     return result
 
 
-final_answer = answer()
+if 'generated' not in st.session_state:
+    st.session_state['generated'] = []
 
-st.write(final_answer)
+if 'past' not in st.session_state:
+    st.session_state['past'] = []
+
+
+def get_text():
+    input_text = st.text_input("You: ", "", key="input")
+    return input_text
+
+
+user_input = get_text()
+
+if user_input:
+    output = generate_response(user_input)
+    # store the output
+    st.session_state.past.append(user_input)
+    st.session_state.generated.append(output)
+
+if st.session_state['generated']:
+    for i in range(len(st.session_state['generated']) - 1, -1, -1):
+        message(st.session_state["generated"][i], key=str(i))
+        message(st.session_state['past'][i], is_user=True, key=str(i) + '_user')
