@@ -1,14 +1,15 @@
 import os
-import io
-import streamlit as st
-from streamlit_chat import message
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chains import RetrievalQA
-from langchain.llms import OpenAI
 
-os.environ["OPENAI_API_KEY"] = ''
+import streamlit as st
+from langchain.chains import RetrievalQA
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.llms import OpenAI
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+from streamlit_chat import message
+from langchain.document_loaders import UnstructuredFileLoader
+
+os.environ["OPENAI_API_KEY"] = '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'
 
 st.set_page_config(page_title="Document retrieval and question answering with langchain library", page_icon=":robot:")
 st.header("Document retrieval and question answering with langchain library")
@@ -29,17 +30,22 @@ with col2:
 with col3:
     st.image(image="chat_gpt.png", width=200)
 
-uploaded_file = st.file_uploader("Upload your file to analyze.")
+uploaded_file = st.file_uploader("Upload your file to analyze. ")
 
 
 def generate_response(query):
     if uploaded_file is None:
         return "No file uploaded."
 
-    file_stream = io.TextIOWrapper(uploaded_file, encoding='utf-8')
-    text_splitter = CharacterTextSplitter(chunk_size=1600, chunk_overlap=0)
-    texts = text_splitter.split_documents(file_stream)
+    location = "c:\\tmp\\" + uploaded_file.name
+    file = open(location, "wb")
+    file.write(uploaded_file.getvalue())
 
+    loader = UnstructuredFileLoader(location)
+    documents = loader.load()
+
+    text_splitter = CharacterTextSplitter(chunk_size=1600, chunk_overlap=0)
+    texts = text_splitter.split_documents(documents)
     if not texts:
         return "No documents found."
 
@@ -47,13 +53,13 @@ def generate_response(query):
     db = FAISS.from_documents(texts, embeddings)
     retriever = db.as_retriever()
 
-    docs = retriever.get_relevant_documents(query)
+#    docs = retriever.get_relevant_documents(query)
 
     qa = RetrievalQA.from_chain_type(llm=OpenAI(), chain_type="stuff", retriever=retriever,
                                      return_source_documents=True)
-    result = qa({"query": query, "docs": docs})
+    result = qa({"query": query})
 
-    return result
+    return result["result"]
 
 
 if 'generated' not in st.session_state:
@@ -68,7 +74,7 @@ def get_text():
     return input_text
 
 
-user_input = get_text()
+user_input = get_text().encode('utf-8', errors='replace').decode('utf-8')
 
 if user_input:
     output = generate_response(user_input)
